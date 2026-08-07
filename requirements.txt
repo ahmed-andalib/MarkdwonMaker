@@ -1,0 +1,12 @@
+markitdown[all]
+pymupdf4llm
+pdfplumber
+tkinterdnd2
+openpyxl
+sv-ttk
+
+# --- Optional OCR support (installed on demand, not required to run) ---
+# One of the following is installed automatically if you enable OCR from
+# the app. Listed here for reference / manual installs only.
+# pytesseract          # requires the separate `tesseract` system binary
+# easyocr              # pure pip install, larger download (pulls in PyTorch)
