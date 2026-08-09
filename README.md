@@ -1,6 +1,3 @@
-[README.md](https://github.com/user-attachments/files/30812601/README.md)
-# MarkdwonMaker
-quick and easy markdown maker using Python
 # Markdown Maker
 
 A lightweight, cross-platform desktop app that batch-converts PDF, DOCX,
@@ -151,7 +148,3 @@ academic PDF layouts:
   either running as root already or a working `pkexec` policy agent. If
   neither is available, Markdown Maker shows manual install instructions
   instead.
-
-## Next phase:
-- create a web version
-- create an desktop installer
