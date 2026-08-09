@@ -92,6 +92,7 @@ class MarkdownMakerApp:
         self._build_layout()
         self._apply_theme(app_config.load_config().get("theme", "light"))
         self._refresh_ocr_status_label()
+        self._refresh_docling_status_label()
         self._poll_event_queue()
         self.root.protocol("WM_DELETE_WINDOW", self._on_window_close)
 
@@ -145,6 +146,15 @@ class MarkdownMakerApp:
         self.ocr_status_var = tk.StringVar(value="OCR: checking…")
         ttk.Label(settings_row, textvariable=self.ocr_status_var).pack(side="right", padx=(0, 8))
         ttk.Button(settings_row, text="Configure OCR…", command=self._on_configure_ocr).pack(side="right")
+
+        parsing_row = ttk.Frame(top_bar)
+        parsing_row.pack(fill="x", pady=(8, 0))
+
+        self.docling_status_var = tk.StringVar(value="Advanced parsing: checking…")
+        ttk.Label(parsing_row, textvariable=self.docling_status_var).pack(side="right", padx=(0, 8))
+        ttk.Button(
+            parsing_row, text="Configure Advanced Parsing…", command=self._on_configure_docling
+        ).pack(side="right")
 
         drop_frame = ttk.LabelFrame(self.root, text="Drop files or folders here", padding=8)
         drop_frame.pack(fill="both", expand=False, padx=12, pady=(0, 8))
@@ -416,6 +426,20 @@ class MarkdownMakerApp:
         bootstrap.ensure_ocr_setup(force_prompt=True, parent=self.root)
         self._refresh_ocr_status_label()
 
+    def _refresh_docling_status_label(self) -> None:
+        config = app_config.load_config()
+        if config.get("docling_enabled"):
+            self.docling_status_var.set("Advanced parsing: On (Docling)")
+        else:
+            self.docling_status_var.set("Advanced parsing: Off")
+
+    def _on_configure_docling(self) -> None:
+        if self.is_running:
+            messagebox.showwarning("Markdown Maker", "Cannot change parser settings while running.")
+            return
+        bootstrap.ensure_docling_setup(force_prompt=True, parent=self.root)
+        self._refresh_docling_status_label()
+
     def _on_choose_output(self) -> None:
         folder = filedialog.askdirectory(title="Choose an output folder for the Markdown files")
         if folder:
@@ -460,7 +484,8 @@ class MarkdownMakerApp:
             if row_id:
                 self.tree.set(row_id, "status", STATUS_PROCESSING)
             future = self.executor.submit(
-                converter.convert_file, path, self.input_root, self.output_root
+                converter.convert_file, path, self.input_root, self.output_root,
+                self._make_analysis_callback(path),
             )
             future.add_done_callback(self._make_done_callback(path))
             self.futures.append(future)
@@ -480,6 +505,19 @@ class MarkdownMakerApp:
             # own parent as its "root", which converter.py handles gracefully.
             common = resolved[0].parent
         return common
+
+    def _make_analysis_callback(self, path: Path):
+        """
+        Builds the progress_callback passed into converter.convert_file().
+        Runs on the worker thread — it must never touch Tk widgets directly,
+        so it only ever pushes onto the thread-safe event_queue, exactly
+        like the done-callback below. The main thread's poll loop is the
+        only place that actually updates any widget.
+        """
+        def _callback(stage: str, message: str) -> None:
+            self.event_queue.put(("analysis_stage", path, (stage, message)))
+
+        return _callback
 
     def _make_done_callback(self, path: Path):
         def _callback(future: Future) -> None:
@@ -529,6 +567,9 @@ class MarkdownMakerApp:
                     self._handle_batch_complete()
                 elif kind == "type_detected":
                     self._handle_type_detected(path, payload)
+                elif kind == "analysis_stage":
+                    stage, message = payload
+                    self._handle_analysis_stage(path, stage, message)
         except queue.Empty:
             pass
         finally:
@@ -542,6 +583,33 @@ class MarkdownMakerApp:
         self.tree.set(row_id, "type", detected.label)
         if detected.needs_ocr:
             self.tree.item(row_id, tags=("needs_ocr",))
+
+    def _handle_analysis_stage(self, path: Path, stage: str, message: str) -> None:
+        """
+        Live, non-blocking update for parser_selector's analysis stages and
+        the post-hoc quality-gate/escalation messages from converter.py.
+        Everything here is inline in the existing queue row and diagnostics
+        pane — no dialogs, so it never interrupts a running batch.
+        """
+        key = str(path.resolve())
+        row_id = self.row_id_by_path.get(key)
+        if row_id:
+            # Transient — overwritten by the real result once conversion
+            # actually finishes (see _handle_result below).
+            self.tree.set(row_id, "detail", message)
+
+            if stage == "decided":
+                # Early preview of the routing decision, visible before the
+                # file has actually finished converting. Overwritten with
+                # the real engine name once _handle_result fires.
+                if "docling" in message.lower():
+                    self.tree.set(row_id, "engine", "docling (pending)")
+                else:
+                    self.tree.set(row_id, "engine", "fast cascade (pending)")
+            elif stage == "escalating":
+                self.tree.set(row_id, "engine", "docling (pending)")
+
+        self._append_diag(f"[{self._timestamp()}] {path.name} — {message}\n")
 
     def _handle_result(self, path: Path, result: "converter.ConversionResult") -> None:
         key = str(path.resolve())
