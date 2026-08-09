@@ -21,6 +21,8 @@ _DEFAULTS: Dict[str, Any] = {
     "ocr_engine": None,  # "tesseract" | "easyocr" | None
     "tesseract_path": None,  # full path to tesseract.exe/tesseract, if not on PATH
     "theme": "light",  # "light" | "dark"
+    "docling_setup_completed": False,  # True once the user has answered the Docling prompt at all
+    "docling_enabled": False,
 }
 
 
