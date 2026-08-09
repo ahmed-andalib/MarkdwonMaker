@@ -56,6 +56,10 @@ OCR_PACKAGES: Dict[str, str] = {
     "easyocr": "easyocr",
 }
 
+DOCLING_PACKAGES: Dict[str, str] = {
+    "docling": "docling",
+}
+
 
 @dataclass
 class DependencyStatus:
@@ -531,3 +535,63 @@ def ensure_ocr_setup(force_prompt: bool = False, parent: Optional[tk.Misc] = Non
             "ocr_engine": engine_choice if success else None,
         }
     )
+
+
+# ----------------------------------------------------------------------
+# Optional advanced PDF parsing (Docling) setup flow
+# ----------------------------------------------------------------------
+
+def _install_docling(parent: Optional[tk.Misc] = None) -> bool:
+    return _run_pip_install(
+        [DOCLING_PACKAGES["docling"]],
+        header="Installing advanced PDF parser…",
+        subtext="Downloads layout-analysis and table-structure models — this is a large "
+        "download (roughly 1-2GB) and may take a while depending on your connection.",
+        parent=parent,
+    )
+
+
+def ensure_docling_setup(force_prompt: bool = False, parent: Optional[tk.Misc] = None) -> Dict[str, object]:
+    """
+    Optional advanced-PDF-parsing opt-in flow. Only prompts once (persisted
+    via app_config) unless force_prompt=True, which the UI uses for a
+    "Configure Advanced Parsing…" button.
+
+    Unlike OCR, there's no engine choice here — Docling is the one option —
+    so this is a simple Yes/No + install, following the same parent-aware
+    pattern as ensure_ocr_setup so it works correctly both pre-UI-launch and
+    from inside the already-running app.
+    """
+    config = app_config.load_config()
+
+    if config.get("docling_setup_completed") and not force_prompt:
+        return config
+
+    message = (
+        "Enable advanced parsing for complex research PDFs (real figures, dense or "
+        "irregular tables, heavy math notation)?\n\n"
+        "Markdown Maker will automatically use this only for PDFs that need it, and "
+        "keep using the fast built-in parser for everything else. This is a larger "
+        "download (roughly 1-2GB) since it includes layout-analysis and "
+        "table-structure models. Optional — you can enable this anytime later "
+        "from the app."
+    )
+
+    if parent is not None:
+        wants_docling = messagebox.askyesno(
+            title="Markdown Maker — Advanced PDF Parsing", message=message, parent=parent,
+        )
+    else:
+        probe_root = tk.Tk()
+        probe_root.withdraw()
+        _bring_window_to_front(probe_root)
+        wants_docling = messagebox.askyesno(
+            title="Markdown Maker — Advanced PDF Parsing", message=message, parent=probe_root,
+        )
+        probe_root.destroy()
+
+    if not wants_docling:
+        return app_config.save_config({"docling_setup_completed": True, "docling_enabled": False})
+
+    success = _install_docling(parent=parent)
+    return app_config.save_config({"docling_setup_completed": True, "docling_enabled": success})
