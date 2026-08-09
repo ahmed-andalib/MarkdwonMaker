@@ -10,3 +10,11 @@ sv-ttk
 # the app. Listed here for reference / manual installs only.
 # pytesseract          # requires the separate `tesseract` system binary
 # easyocr              # pure pip install, larger download (pulls in PyTorch)
+
+# --- Optional advanced PDF parsing (installed on demand, not required) ---
+# Installed automatically if you enable "advanced parsing" from the app.
+# Large download (~1-2GB) — pulls in PyTorch, transformers, and layout/
+# table-structure models. Used automatically for PDFs with real figures,
+# irregular tables, or heavy math notation; everything else keeps using
+# the fast built-in cascade.
+# docling
