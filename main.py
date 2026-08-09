@@ -32,6 +32,11 @@ def main() -> int:
     # without OCR, just with reduced accuracy on scanned/image files.
     bootstrap.ensure_ocr_setup()
 
+    # Optional advanced PDF parsing (Docling) — same opt-in pattern as OCR.
+    # Declining or the install failing is not fatal: the app falls back to
+    # the fast built-in cascade for every PDF, same as before this existed.
+    bootstrap.ensure_docling_setup()
+
     import ui
 
     ui.launch()
